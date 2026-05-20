@@ -24,7 +24,7 @@ import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 
 import io.delta.storage.commit.CommitCoordinatorClient
-import io.delta.storage.commit.uccommitcoordinator.{UCClient, UCCommitCoordinatorClient, UCTokenBasedRestClient}
+import io.delta.storage.commit.uccommitcoordinator.{UCClient, UCCommitCoordinatorClient, UCConfigUtils, UCTokenBasedRestClient}
 import org.apache.hadoop.conf.Configuration
 
 import org.apache.spark.sql.delta.logging.DeltaLogKeys
@@ -85,7 +85,7 @@ object UCCommitCoordinatorBuilder
       spark: SparkSession,
       catalogName: String): CommitCoordinatorClient = {
     val client = getCatalogConfigs(spark).find(_._1 == catalogName) match {
-      case Some((_, ucConfig)) => ucClientFactory.createUCClient(ucConfig.asJava)
+      case Some((_, ucConfig)) => ucClientFactory.createUCClient(ucConfig)
       case None =>
         throw new IllegalArgumentException(
           s"Catalog $catalogName not found in the provided SparkSession configurations.")
@@ -110,7 +110,7 @@ object UCCommitCoordinatorBuilder
 
     matchingConfigs match {
       case Nil => throw noMatchingCatalogException(metastoreId)
-      case ucConfig :: Nil => ucClientFactory.createUCClient(ucConfig.asJava)
+      case ucConfig :: Nil => ucClientFactory.createUCClient(ucConfig)
       case multiple =>
         throw multipleMatchingCatalogs(metastoreId, multiple.map(_.getOrElse("uri", "<unknown>")))
     }
@@ -128,7 +128,7 @@ object UCCommitCoordinatorBuilder
       val metastoreId = ucConfigToMetastoreIdCache.computeIfAbsent(
         ucConfig,
         _ => {
-          val ucClient = ucClientFactory.createUCClient(ucConfig.asJava)
+          val ucClient = ucClientFactory.createUCClient(ucConfig)
           try {
             ucClient.getMetastoreId
           } finally {
@@ -249,7 +249,11 @@ object UCCommitCoordinatorBuilder
 
 /** Factory trait for creating [[UCClient]] instances from a unified configuration map. */
 trait UCClientFactory {
-  def createUCClient(ucConfig: java.util.Map[String, String]): UCClient
+  def createUCClient(ucConfig: Map[String, String]): UCClient
+
+  def createUCClient(ucConfig: java.util.Map[String, String]): UCClient = {
+    createUCClient(ucConfig.asScala.toMap)
+  }
 }
 
 /**
@@ -291,56 +295,44 @@ object UCTokenBasedRestClientFactory extends UCClientFactory {
   final val AUTH_PREFIX = "auth."
   final val DELTA_REST_API_ENABLED_KEY = "deltaRestApi.enabled"
   final val APP_VERSIONS_PREFIX = "appVersions."
-  /** Opt-in: caller wants `UCDeltaTokenBasedRestClient` constructed with credential renewal. */
-  final val RENEW_CREDENTIAL_ENABLED_KEY = "renewCredential.enabled"
-  /** Opt-in: caller wants `UCDeltaTokenBasedRestClient` constructed with cred-scoped FS. */
-  final val CRED_SCOPED_FS_ENABLED_KEY = "credScopedFs.enabled"
-
-  private val DEFAULT_UC_CLIENT_CLASS: String = classOf[UCTokenBasedRestClient].getName
-
   private val DELTA_UC_CLIENT_CLASS: String =
     "io.delta.storage.commit.uccommitcoordinator.UCDeltaTokenBasedRestClient"
 
-  override def createUCClient(ucConfig: java.util.Map[String, String]): UCClient = {
-    val uri = Option(ucConfig.get(URI_KEY)).getOrElse(
-      throw new IllegalArgumentException(s"UC config must contain '$URI_KEY'"))
+  override def createUCClient(ucConfig: Map[String, String]): UCClient = {
+    val isDeltaRestApi =
+      ucConfig.get(DELTA_REST_API_ENABLED_KEY).exists(_.equalsIgnoreCase("true"))
 
-    val authConfig = extractAuthConfig(ucConfig)
-    val tokenProvider = TokenProvider.create(authConfig)
+    if (isDeltaRestApi) {
+      createDeltaClient(ucConfig)
+    } else {
+      createDefaultClient(ucConfig)
+    }
+  }
 
-    val className =
-      if (ucConfig.getOrDefault(DELTA_REST_API_ENABLED_KEY, "true").toBoolean) {
-        DELTA_UC_CLIENT_CLASS
-      } else {
-        DEFAULT_UC_CLIENT_CLASS
-      }
-
-    val cls = Utils.classForName(className)
-    require(classOf[UCClient].isAssignableFrom(cls),
-      s"$className does not implement ${classOf[UCClient].getName}")
-    val appVersions = extractAppVersions(ucConfig)
-    val renewCred = Option(ucConfig.get(RENEW_CREDENTIAL_ENABLED_KEY)).exists(_.toBoolean)
-    val credScopedFs = Option(ucConfig.get(CRED_SCOPED_FS_ENABLED_KEY)).exists(_.toBoolean)
+  private def createDeltaClient(ucConfig: Map[String, String]): UCClient = {
     val hadoopConfSupplier: Supplier[Configuration] = () =>
       SparkSession.getActiveSession
         .map(_.sparkContext.hadoopConfiguration)
         .getOrElse(new Configuration())
-    val ctor = cls.getConstructor(
-      classOf[String],
-      classOf[TokenProvider],
-      classOf[java.util.Map[_, _]],
-      java.lang.Boolean.TYPE,
-      java.lang.Boolean.TYPE,
-      classOf[Supplier[_]])
-    ctor
-      .newInstance(
-        uri,
-        tokenProvider,
-        appVersions.asJava,
-        java.lang.Boolean.valueOf(renewCred),
-        java.lang.Boolean.valueOf(credScopedFs),
-        hadoopConfSupplier)
+    val appVersionEntries = defaultAppVersions.map { case (k, v) =>
+      (UCConfigUtils.APP_VERSIONS_PREFIX + k) -> v
+    }
+    val merged = appVersionEntries ++ ucConfig
+    val cls = Utils.classForName(DELTA_UC_CLIENT_CLASS)
+    require(classOf[UCClient].isAssignableFrom(cls),
+      s"$DELTA_UC_CLIENT_CLASS does not implement ${classOf[UCClient].getName}")
+    cls.getConstructor(classOf[java.util.Map[_, _]], classOf[Supplier[_]])
+      .newInstance(merged.asJava, hadoopConfSupplier)
       .asInstanceOf[UCClient]
+  }
+
+  private def createDefaultClient(ucConfig: Map[String, String]): UCClient = {
+    val uri = ucConfig.getOrElse(URI_KEY,
+      throw new IllegalArgumentException(s"UC config must contain '$URI_KEY'"))
+    val authConfig = extractAuthConfig(ucConfig.asJava)
+    val tokenProvider = TokenProvider.create(authConfig)
+    val appVersions = extractAppVersions(ucConfig.asJava)
+    new UCTokenBasedRestClient(uri, tokenProvider, appVersions.asJava)
   }
 
   /**

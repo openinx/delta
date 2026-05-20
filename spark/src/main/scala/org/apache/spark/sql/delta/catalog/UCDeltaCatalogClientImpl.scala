@@ -26,7 +26,7 @@ import scala.util.control.NonFatal
 
 import io.delta.storage.commit.{TableIdentifier => StorageTableIdentifier}
 import io.delta.storage.commit.actions.{AbstractDomainMetadata, AbstractProtocol}
-import io.delta.storage.commit.uccommitcoordinator.{UCDeltaClient, UCDeltaModels}
+import io.delta.storage.commit.uccommitcoordinator.{UCConfigUtils, UCDeltaClient, UCDeltaModels}
 import io.delta.storage.commit.uniform.{UniformMetadata => StorageUniformMetadata}
 import io.delta.storage.commit.uccommitcoordinator.UCCommitCoordinatorClient.UC_TABLE_ID_KEY
 import io.delta.storage.commit.uccommitcoordinator.UCDeltaModels.TableInfo
@@ -696,8 +696,8 @@ object UCDeltaCatalogClientImpl extends AbstractDeltaCatalogClientFactory with L
    * Builds a [[UCDeltaCatalogClientImpl]] from catalog options. The `deltaRestApi.enabled` gate
    * is the caller's responsibility ([[AbstractDeltaCatalogClient.fromCatalogOptionsIfEnabled]]).
    * `fallbackLoadTableFunc` is invoked when UC reports `UnsupportedTableFormatException`. UC client
-   * construction is delegated to [[UCTokenBasedRestClientFactory]] with `renewCredential.enabled`
-   * defaulted to `true` and `credScopedFs.enabled` defaulted to `false` when not set.
+   * construction is delegated to [[UCTokenBasedRestClientFactory]] with `deltaRestApi.enabled`
+   * defaulted to `true` when not set; credential-related defaults are handled by the client.
    */
   override def fromCatalogOptions(
       catalogName: String,
@@ -712,12 +712,11 @@ object UCDeltaCatalogClientImpl extends AbstractDeltaCatalogClientFactory with L
     // `asCaseSensitiveMap()` preserves the user's original key case; `containsKey` is
     // case-insensitive so defaults don't create duplicate keys.
     val merged = new java.util.HashMap[String, String](options.asCaseSensitiveMap())
-    Seq(
-      UCTokenBasedRestClientFactory.RENEW_CREDENTIAL_ENABLED_KEY -> "true",
-      UCTokenBasedRestClientFactory.CRED_SCOPED_FS_ENABLED_KEY -> "false"
-    ).foreach { case (k, v) => if (!options.containsKey(k)) merged.put(k, v) }
+    if (!options.containsKey(UCTokenBasedRestClientFactory.DELTA_REST_API_ENABLED_KEY)) {
+      merged.put(UCTokenBasedRestClientFactory.DELTA_REST_API_ENABLED_KEY, "true")
+    }
     val ucClient = UCTokenBasedRestClientFactory
-      .createUCClient(new CaseInsensitiveStringMap(merged))
+      .createUCClient(merged)
       .asInstanceOf[UCDeltaClient]
 
     val sspEnabled = options.getBoolean(ServerSidePlanningEnabledKey, false)
@@ -736,9 +735,7 @@ object UCDeltaCatalogClientImpl extends AbstractDeltaCatalogClientFactory with L
   private[catalog] def validateAuthConfigured(
       options: CaseInsensitiveStringMap,
       catalogName: String): Unit = {
-    val hasAuthPrefix = options.entrySet().asScala.exists(_.getKey.startsWith(AuthPrefix))
-    val hasLegacyToken = options.get(LegacyTokenKey) != null
-    if (!hasAuthPrefix && !hasLegacyToken) {
+    if (!UCConfigUtils.hasAuthConfig(options.asCaseSensitiveMap())) {
       throw new IllegalArgumentException(
         s"auth configuration is required (catalog '$catalogName'). " +
           s"Set either '${AuthPrefix}type' (with the corresponding " +
