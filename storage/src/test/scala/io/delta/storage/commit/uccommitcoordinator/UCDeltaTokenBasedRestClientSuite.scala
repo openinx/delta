@@ -306,7 +306,8 @@ class UCDeltaTokenBasedRestClientSuite
     withClient { c =>
       c.commit(testTableId.toString, new URI("s3://bucket/table"), testIdentifier,
         Optional.of(createCommit(5L)), Optional.of(java.lang.Long.valueOf(3L)),
-        Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())
+        Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+        Collections.emptyList())
     }
 
     val json = objectMapper.readTree(captured)
@@ -348,7 +349,7 @@ class UCDeltaTokenBasedRestClientSuite
       c.commit(testTableId.toString, new URI("s3://b/t"), testIdentifier,
         Optional.of(createCommit(1L)), Optional.empty(),
         Optional.of(oldMeta), Optional.of(newMeta),
-        Optional.empty(), Optional.empty(), Optional.empty())
+        Optional.empty(), Optional.empty(), Optional.empty(), Collections.emptyList())
     }
 
     val actions = {
@@ -377,7 +378,8 @@ class UCDeltaTokenBasedRestClientSuite
       c.commit(testTableId.toString, new URI("s3://b/t"), testIdentifier,
         Optional.of(createCommit(1L)), Optional.empty(),
         Optional.empty(), Optional.empty(),
-        Optional.of(oldProto), Optional.of(newProto), Optional.empty())
+        Optional.of(oldProto), Optional.of(newProto), Optional.empty(),
+        Collections.emptyList())
     }
 
     val updates = objectMapper.readTree(captured).get("updates")
@@ -404,7 +406,7 @@ class UCDeltaTokenBasedRestClientSuite
       c.commit(testTableId.toString, new URI("s3://b/t"), testIdentifier,
         Optional.of(createCommit(1L)), Optional.empty(),
         Optional.of(m1), Optional.of(m2),
-        Optional.empty(), Optional.empty(), Optional.empty())
+        Optional.empty(), Optional.empty(), Optional.empty(), Collections.emptyList())
     }
 
     val updates = objectMapper.readTree(captured).get("updates")
@@ -430,7 +432,7 @@ class UCDeltaTokenBasedRestClientSuite
       c.commit(testTableId.toString, new URI("s3://b/t"), testIdentifier,
         Optional.of(createCommit(1L)), Optional.empty(),
         Optional.empty(), Optional.empty(),
-        Optional.of(p1), Optional.of(p2), Optional.empty())
+        Optional.of(p1), Optional.of(p2), Optional.empty(), Collections.emptyList())
     }
 
     val updates = objectMapper.readTree(captured).get("updates")
@@ -454,7 +456,7 @@ class UCDeltaTokenBasedRestClientSuite
       c.commit(testTableId.toString, new URI("s3://b/t"), testIdentifier,
         Optional.of(createCommit(1L)), Optional.empty(),
         Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-        Optional.of(uniform))
+        Optional.of(uniform), Collections.emptyList())
     }
 
     val addCommit = {
@@ -484,7 +486,7 @@ class UCDeltaTokenBasedRestClientSuite
       c.commit(testTableId.toString, new URI("s3://b/t"), testIdentifier,
         Optional.of(createCommit(1L)), Optional.empty(),
         Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-        Optional.of(uniform))
+        Optional.of(uniform), Collections.emptyList())
     }
 
     val addCommit = {
@@ -511,7 +513,8 @@ class UCDeltaTokenBasedRestClientSuite
       val e = intercept[CommitFailedException] {
         c.commit(testTableId.toString, new URI("s3://b/t"), testIdentifier,
           Optional.of(createCommit(1L)), Optional.empty(), Optional.empty(),
-          Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())
+          Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+          Collections.emptyList())
       }
       assert(e.getRetryable && e.getConflict)
     }
@@ -530,7 +533,8 @@ class UCDeltaTokenBasedRestClientSuite
       intercept[InvalidTargetTableException] {
         c.commit(testTableId.toString, new URI("s3://b/t"), testIdentifier,
           Optional.of(createCommit(1L)), Optional.empty(), Optional.empty(),
-          Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())
+          Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+          Collections.emptyList())
       }
     }
   }
