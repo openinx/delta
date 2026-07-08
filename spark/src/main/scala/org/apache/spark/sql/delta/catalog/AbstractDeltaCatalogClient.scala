@@ -16,6 +16,7 @@
 
 package org.apache.spark.sql.delta.catalog
 
+import io.delta.storage.commit.uccommitcoordinator.UCConfigUtils
 import io.delta.storage.commit.uniform.UniformMetadata
 
 import java.util
@@ -24,7 +25,6 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.connector.catalog.{Identifier, Table}
 import org.apache.spark.sql.delta.actions.{Action, DomainMetadata, Metadata, Protocol}
-import org.apache.spark.sql.delta.coordinatedcommits.UCTokenBasedRestClientFactory
 import org.apache.spark.sql.delta.stats.FileSizeHistogram
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
@@ -188,7 +188,7 @@ private[delta] object AbstractDeltaCatalogClient extends Logging {
       catalogName: String,
       options: CaseInsensitiveStringMap,
       fallbackLoadTableFunc: Identifier => Table): Option[AbstractDeltaCatalogClient] = {
-    val key = UCTokenBasedRestClientFactory.DELTA_REST_API_ENABLED_KEY
+    val key = UCConfigUtils.DELTA_REST_API_ENABLED_KEY
     if (!options.getBoolean(key, true)) {
       return None
     }

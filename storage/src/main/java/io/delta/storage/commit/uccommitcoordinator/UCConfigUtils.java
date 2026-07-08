@@ -25,12 +25,24 @@ import java.util.Map;
  * Shared utility methods for parsing flat UC configuration maps (e.g. auth, appVersions).
  * Used by both the Scala factory ({@code UCTokenBasedRestClientFactory}) and the Java
  * clients ({@link UCDeltaTokenBasedRestClient}, {@link UCTokenBasedRestClient}).
+ *
+ * <p>Config key names are the single source of truth and must stay aligned with OSS Unity Catalog.
  */
 public final class UCConfigUtils {
 
   public static final String URI_KEY = "uri";
   public static final String AUTH_PREFIX = "auth.";
   public static final String APP_VERSIONS_PREFIX = "appVersions.";
+  public static final String DELTA_REST_API_ENABLED_KEY = "deltaRestApi.enabled";
+  public static final String RENEW_CREDENTIAL_ENABLED_KEY = "renewCredential.enabled";
+  public static final String CRED_SCOPED_FS_ENABLED_KEY = "credScopedFs.enabled";
+
+  /** Legacy top-level token key (without {@code auth.} prefix). */
+  public static final String LEGACY_TOKEN_KEY = "token";
+  /** Auth config key for the token provider type. */
+  public static final String AUTH_TYPE_KEY = "type";
+  /** Static token provider type value for legacy {@code token} configs. */
+  public static final String STATIC_AUTH_TYPE = "static";
 
   private UCConfigUtils() {}
 
@@ -66,11 +78,11 @@ public final class UCConfigUtils {
     if (!authConfig.isEmpty()) {
       return authConfig;
     }
-    String token = ucConfig.get("token");
+    String token = ucConfig.get(LEGACY_TOKEN_KEY);
     if (token != null) {
       Map<String, String> legacy = new LinkedHashMap<>();
-      legacy.put("type", "static");
-      legacy.put("token", token);
+      legacy.put(AUTH_TYPE_KEY, STATIC_AUTH_TYPE);
+      legacy.put(LEGACY_TOKEN_KEY, token);
       return legacy;
     }
     return Collections.emptyMap();
@@ -87,7 +99,7 @@ public final class UCConfigUtils {
         return true;
       }
     }
-    return ucConfig.containsKey("token");
+    return ucConfig.containsKey(LEGACY_TOKEN_KEY);
   }
 
   /**
@@ -105,6 +117,15 @@ public final class UCConfigUtils {
       }
     }
     return versions;
+  }
+
+  /**
+   * Returns whether the Delta REST API client should be used. Defaults to {@code true} when the
+   * key is absent.
+   */
+  public static boolean isDeltaRestApiEnabled(Map<String, String> ucConfig) {
+    String value = ucConfig.get(DELTA_REST_API_ENABLED_KEY);
+    return value == null || value.equalsIgnoreCase("true");
   }
 
   /**

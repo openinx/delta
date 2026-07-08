@@ -108,9 +108,6 @@ public class UCDeltaTokenBasedRestClient implements UCDeltaClient {
   private static final int HTTP_CONFLICT = 409;
   private static final int HTTP_NOT_FOUND = 404;
 
-  public static final String RENEW_CREDENTIAL_ENABLED_KEY = "renewCredential.enabled";
-  public static final String CRED_SCOPED_FS_ENABLED_KEY = "credScopedFs.enabled";
-
   private DeltaTablesApi deltaTablesApi;
   private MetastoresApi metastoresApi;
   private final ApiClient apiClient;
@@ -129,7 +126,7 @@ public class UCDeltaTokenBasedRestClient implements UCDeltaClient {
    *   <li>{@code auth.*} / {@code token} (legacy) -- authentication parameters.</li>
    *   <li>{@code appVersions.*} -- caller-supplied version entries.</li>
    *   <li>{@code renewCredential.enabled} -- enable credential renewal (default true).</li>
-   *   <li>{@code credScopedFs.enabled} -- enable credential-scoped FS (default false).</li>
+   *   <li>{@code credScopedFs.enabled} -- enable credential-scoped FS (default true).</li>
    * </ul>
    *
    * @param ucConfig the unified configuration map with all keys.
@@ -161,10 +158,10 @@ public class UCDeltaTokenBasedRestClient implements UCDeltaClient {
     this.baseUri = baseUri;
     this.tokenProvider = tokenProvider;
     this.appVersions = appVersions;
-    this.credentialRenewalEnabled =
-        UCConfigUtils.parseBoolean(ucConfig, RENEW_CREDENTIAL_ENABLED_KEY, true);
-    this.credentialScopedFsEnabled =
-        UCConfigUtils.parseBoolean(ucConfig, CRED_SCOPED_FS_ENABLED_KEY, false);
+    this.credentialRenewalEnabled = UCConfigUtils.parseBoolean(
+        ucConfig, UCConfigUtils.RENEW_CREDENTIAL_ENABLED_KEY, true);
+    this.credentialScopedFsEnabled = UCConfigUtils.parseBoolean(
+        ucConfig, UCConfigUtils.CRED_SCOPED_FS_ENABLED_KEY, true);
     this.hadoopConfSupplier = hadoopConfSupplier != null ? hadoopConfSupplier : Configuration::new;
   }
 

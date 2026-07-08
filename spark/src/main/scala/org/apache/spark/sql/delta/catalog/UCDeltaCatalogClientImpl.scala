@@ -697,49 +697,43 @@ object UCDeltaCatalogClientImpl extends AbstractDeltaCatalogClientFactory with L
    * is the caller's responsibility ([[AbstractDeltaCatalogClient.fromCatalogOptionsIfEnabled]]).
    * `fallbackLoadTableFunc` is invoked when UC reports `UnsupportedTableFormatException`. UC client
    * construction is delegated to [[UCTokenBasedRestClientFactory]] with `deltaRestApi.enabled`
-   * defaulted to `true` when not set; credential-related defaults are handled by the client.
+   * defaulted to `true` when not set; credential-related defaults (`renewCredential.enabled`,
+   * `credScopedFs.enabled`) default to `true` in the client.
    */
   override def fromCatalogOptions(
       catalogName: String,
       options: CaseInsensitiveStringMap,
       fallbackLoadTableFunc: Identifier => Table): UCDeltaCatalogClientImpl = {
     // Pre-flight: keep our user-facing errors instead of the factory's less specific ones.
-    if (options.get(UriKey) == null) {
-      throw new IllegalArgumentException(s"'$UriKey' is required (catalog '$catalogName')")
+    if (options.get(UCConfigUtils.URI_KEY) == null) {
+      throw new IllegalArgumentException(
+        s"'${UCConfigUtils.URI_KEY}' is required (catalog '$catalogName')")
     }
     validateAuthConfigured(options, catalogName)
 
     // `asCaseSensitiveMap()` preserves the user's original key case; `containsKey` is
     // case-insensitive so defaults don't create duplicate keys.
     val merged = new java.util.HashMap[String, String](options.asCaseSensitiveMap())
-    if (!options.containsKey(UCTokenBasedRestClientFactory.DELTA_REST_API_ENABLED_KEY)) {
-      merged.put(UCTokenBasedRestClientFactory.DELTA_REST_API_ENABLED_KEY, "true")
+    if (!options.containsKey(UCConfigUtils.DELTA_REST_API_ENABLED_KEY)) {
+      merged.put(UCConfigUtils.DELTA_REST_API_ENABLED_KEY, "true")
     }
     val ucClient = UCTokenBasedRestClientFactory
-      .createUCClient(merged)
+      .createUCClient(new CaseInsensitiveStringMap(merged))
       .asInstanceOf[UCDeltaClient]
 
     val sspEnabled = options.getBoolean(ServerSidePlanningEnabledKey, false)
     new UCDeltaCatalogClientImpl(catalogName, ucClient, sspEnabled, fallbackLoadTableFunc)
   }
 
-  private val UriKey: String = "uri"
-  private val AuthPrefix: String = "auth."
-  private val LegacyTokenKey: String = "token"
-
-  /**
-   * Pre-flight: ensure at least one of `auth.*` or legacy `token` is present, so the user
-   * sees a clear error (and catalog name) instead of the factory's internal failure when
-   * `TokenProvider.create` is handed an empty config.
-   */
   private[catalog] def validateAuthConfigured(
       options: CaseInsensitiveStringMap,
       catalogName: String): Unit = {
     if (!UCConfigUtils.hasAuthConfig(options.asCaseSensitiveMap())) {
       throw new IllegalArgumentException(
         s"auth configuration is required (catalog '$catalogName'). " +
-          s"Set either '${AuthPrefix}type' (with the corresponding " +
-          s"$AuthPrefix* keys) or the legacy '$LegacyTokenKey' option.")
+          s"Set either '${UCConfigUtils.AUTH_PREFIX}type' (with the corresponding " +
+          s"${UCConfigUtils.AUTH_PREFIX}* keys) or the legacy " +
+          s"'${UCConfigUtils.LEGACY_TOKEN_KEY}' option.")
     }
   }
 

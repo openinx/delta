@@ -80,10 +80,10 @@ class UCCommitCoordinatorBuilderSuite extends SparkFunSuite with SharedSparkSess
       configs.foreach { config =>
         (config.uri, config.configMap.isEmpty, config.metastoreId) match {
           case (Some(_), false, Some(id)) =>
-            registerMetastoreId(config.expectedUcConfig, id)
+            registerMetastoreId(config.expectedUcConfig.asJava, id)
           case (Some(_), false, None) =>
             registerMetastoreIdException(
-              config.expectedUcConfig,
+              config.expectedUcConfig.asJava,
               new RuntimeException("Invalid metastore ID"))
           case _ =>
         }
@@ -111,14 +111,14 @@ class UCCommitCoordinatorBuilderSuite extends SparkFunSuite with SharedSparkSess
       val result = getCommitCoordinatorClient(expectedMetastoreId)
 
       assert(result.isInstanceOf[UCCommitCoordinatorClient])
-      verify(mockFactory, times(2)).createUCClient(catalog1.expectedUcConfig)
-      verify(mockFactory).createUCClient(catalog2.expectedUcConfig)
-      verify(mockFactory.createUCClient(catalog1.expectedUcConfig))
+      verify(mockFactory, times(2)).createUCClient(catalog1.expectedUcConfig.asJava)
+      verify(mockFactory).createUCClient(catalog2.expectedUcConfig.asJava)
+      verify(mockFactory.createUCClient(catalog1.expectedUcConfig.asJava))
         .getMetastoreId
-      verify(mockFactory.createUCClient(catalog2.expectedUcConfig))
+      verify(mockFactory.createUCClient(catalog2.expectedUcConfig.asJava))
         .getMetastoreId
-      verify(mockFactory.createUCClient(catalog2.expectedUcConfig)).close()
-      verify(mockFactory.createUCClient(catalog1.expectedUcConfig)).close()
+      verify(mockFactory.createUCClient(catalog2.expectedUcConfig.asJava)).close()
+      verify(mockFactory.createUCClient(catalog1.expectedUcConfig.asJava)).close()
     }
   }
 
@@ -154,9 +154,9 @@ class UCCommitCoordinatorBuilderSuite extends SparkFunSuite with SharedSparkSess
         getCommitCoordinatorClient(metastoreId)
       }
       assert(exception.getMessage.contains("No matching catalog found"))
-      verify(mockFactory).createUCClient(catalog.expectedUcConfig)
-      verify(mockFactory.createUCClient(catalog.expectedUcConfig)).getMetastoreId
-      verify(mockFactory.createUCClient(catalog.expectedUcConfig)).close()
+      verify(mockFactory).createUCClient(catalog.expectedUcConfig.asJava)
+      verify(mockFactory.createUCClient(catalog.expectedUcConfig.asJava)).getMetastoreId
+      verify(mockFactory.createUCClient(catalog.expectedUcConfig.asJava)).close()
     }
   }
 
@@ -180,14 +180,14 @@ class UCCommitCoordinatorBuilderSuite extends SparkFunSuite with SharedSparkSess
         getCommitCoordinatorClient(metastoreId)
       }
       assert(exception.getMessage.contains("Found multiple catalogs"))
-      verify(mockFactory).createUCClient(catalog1.expectedUcConfig)
-      verify(mockFactory).createUCClient(catalog2.expectedUcConfig)
-      verify(mockFactory.createUCClient(catalog1.expectedUcConfig))
+      verify(mockFactory).createUCClient(catalog1.expectedUcConfig.asJava)
+      verify(mockFactory).createUCClient(catalog2.expectedUcConfig.asJava)
+      verify(mockFactory.createUCClient(catalog1.expectedUcConfig.asJava))
         .getMetastoreId
-      verify(mockFactory.createUCClient(catalog2.expectedUcConfig))
+      verify(mockFactory.createUCClient(catalog2.expectedUcConfig.asJava))
         .getMetastoreId
-      verify(mockFactory.createUCClient(catalog1.expectedUcConfig)).close()
-      verify(mockFactory.createUCClient(catalog2.expectedUcConfig)).close()
+      verify(mockFactory.createUCClient(catalog1.expectedUcConfig.asJava)).close()
+      verify(mockFactory.createUCClient(catalog2.expectedUcConfig.asJava)).close()
     }
   }
 
@@ -220,9 +220,9 @@ class UCCommitCoordinatorBuilderSuite extends SparkFunSuite with SharedSparkSess
 
       assert(result.isInstanceOf[UCCommitCoordinatorClient])
       verify(mockFactory, times(2)).createUCClient(
-        validCatalog.expectedUcConfig
+        validCatalog.expectedUcConfig.asJava
       )
-      verify(mockFactory.createUCClient(validCatalog.expectedUcConfig),
+      verify(mockFactory.createUCClient(validCatalog.expectedUcConfig.asJava),
         times(1)).close()
     }
   }
@@ -271,9 +271,9 @@ class UCCommitCoordinatorBuilderSuite extends SparkFunSuite with SharedSparkSess
       val result = getCommitCoordinatorClient(metastoreId)
 
       assert(result.isInstanceOf[UCCommitCoordinatorClient])
-      verify(mockFactory, times(2)).createUCClient(sharedUcConfig)
-      verify(mockFactory.createUCClient(sharedUcConfig)).getMetastoreId
-      verify(mockFactory.createUCClient(sharedUcConfig)).close()
+      verify(mockFactory, times(2)).createUCClient(sharedUcConfig.asJava)
+      verify(mockFactory.createUCClient(sharedUcConfig.asJava)).getMetastoreId
+      verify(mockFactory.createUCClient(sharedUcConfig.asJava)).close()
     }
   }
 
@@ -293,12 +293,12 @@ class UCCommitCoordinatorBuilderSuite extends SparkFunSuite with SharedSparkSess
         getCommitCoordinatorClient(metastoreId)
       }
       assert(e.getMessage.contains("No matching catalog found"))
-      verify(mockFactory, never()).createUCClient(catalog.expectedUcConfig)
+      verify(mockFactory, never()).createUCClient(catalog.expectedUcConfig.asJava)
     }
   }
 
   private def registerMetastoreId(
-      ucConfig: Map[String, String],
+      ucConfig: java.util.Map[String, String],
       metastoreId: String): Unit = {
     val mockClient = org.mockito.Mockito.mock(classOf[UCClient])
     when(mockClient.getMetastoreId).thenReturn(metastoreId)
@@ -306,7 +306,7 @@ class UCCommitCoordinatorBuilderSuite extends SparkFunSuite with SharedSparkSess
   }
 
   private def registerMetastoreIdException(
-      ucConfig: Map[String, String],
+      ucConfig: java.util.Map[String, String],
       exception: Throwable): Unit = {
     val mockClient = org.mockito.Mockito.mock(classOf[UCClient])
     when(mockClient.getMetastoreId).thenThrow(exception)
@@ -496,7 +496,7 @@ class UCCommitCoordinatorBuilderSuite extends SparkFunSuite with SharedSparkSess
       assert(result.isInstanceOf[UCCommitCoordinatorClient])
 
       verify(mockFactory).createUCClient(
-        any[Map[String, String]]()
+        any[java.util.Map[String, String]]()
       )
     }
   }
@@ -516,7 +516,7 @@ class UCCommitCoordinatorBuilderSuite extends SparkFunSuite with SharedSparkSess
       assert(result.isInstanceOf[UCCommitCoordinatorClient])
 
       verify(mockFactory).createUCClient(
-        any[Map[String, String]]()
+        any[java.util.Map[String, String]]()
       )
     }
   }
