@@ -303,19 +303,14 @@ object UCTokenBasedRestClientFactory extends UCClientFactory {
       SparkSession.getActiveSession
         .map(_.sparkContext.hadoopConfiguration)
         .getOrElse(new Configuration())
-    val appVersionEntries = defaultAppVersions.map { case (k, v) =>
-      (UCConfigUtils.APP_VERSIONS_PREFIX + k) -> v
-    }
-    // Copy via asCaseSensitiveMap() when available so OAuth keys like oauth.clientId
-    // keep their original casing for TokenProvider.create inside UCDeltaTokenBasedRestClient.
-    val casePreservingConfig = ucConfig match {
-      case cism: CaseInsensitiveStringMap =>
-        cism.asCaseSensitiveMap()
-      case m => m
-    }
+    // Seed the default app versions, then overlay the caller's config (which may override them).
+    // caseSensitiveView keeps camelCase auth keys like oauth.clientId intact for the downstream
+    // TokenProvider.create inside UCDeltaTokenBasedRestClient.
     val merged = new java.util.HashMap[String, String]()
-    appVersionEntries.foreach { case (k, v) => merged.put(k, v) }
-    merged.putAll(casePreservingConfig)
+    defaultAppVersions.foreach { case (k, v) =>
+      merged.put(UCConfigUtils.APP_VERSIONS_PREFIX + k, v)
+    }
+    merged.putAll(caseSensitiveView(ucConfig))
     val cls = Utils.classForName(DELTA_UC_CLIENT_CLASS)
     require(classOf[UCClient].isAssignableFrom(cls),
       s"$DELTA_UC_CLIENT_CLASS does not implement ${classOf[UCClient].getName}")
@@ -325,62 +320,33 @@ object UCTokenBasedRestClientFactory extends UCClientFactory {
   }
 
   private def createDefaultClient(ucConfig: java.util.Map[String, String]): UCClient = {
-    val uri = Option(ucConfig.get(UCConfigUtils.URI_KEY)).getOrElse(
-      throw new IllegalArgumentException(
-        s"UC config must contain '${UCConfigUtils.URI_KEY}'"))
-    val authConfig = extractAuthConfig(ucConfig)
-    val tokenProvider = TokenProvider.create(authConfig)
+    val uri = UCConfigUtils.extractUri(ucConfig)
+    val tokenProvider = TokenProvider.create(extractAuthConfig(ucConfig))
     val appVersions = extractAppVersions(ucConfig)
     new UCTokenBasedRestClient(uri, tokenProvider, appVersions.asJava)
   }
 
   /**
-   * Extracts entries from `ucConfig` whose keys (compared case-insensitively) start with
-   * `prefix`, strips the prefix, and returns the result as a plain [[java.util.Map]].
-   * Uses the case-preserving view of the input when available so the returned map retains
-   * original key casing (e.g. `oauth.clientId` rather than `oauth.clientid`).
-   * Callers decide whether to wrap in [[CaseInsensitiveStringMap]].
+   * Returns a case-preserving view of `ucConfig`. [[CaseInsensitiveStringMap]] lowercases its
+   * keys, which would corrupt camelCase keys like `oauth.clientId`; `asCaseSensitiveMap()`
+   * restores the caller's original casing. Any other map is already case-preserving.
    */
-  private[coordinatedcommits] def filterByPrefix(
-      ucConfig: java.util.Map[String, String],
-      prefix: String): java.util.Map[String, String] = {
-    val prefixLower = prefix.toLowerCase(java.util.Locale.ROOT)
-    val sourceEntries = ucConfig match {
-      case cism: CaseInsensitiveStringMap => cism.asCaseSensitiveMap().entrySet()
-      case m => m.entrySet()
+  private def caseSensitiveView(
+      ucConfig: java.util.Map[String, String]): java.util.Map[String, String] = {
+    ucConfig match {
+      case cism: CaseInsensitiveStringMap => cism.asCaseSensitiveMap()
+      case m => m
     }
-    val result = new java.util.HashMap[String, String]()
-    sourceEntries.forEach { e =>
-      if (e.getKey.toLowerCase(java.util.Locale.ROOT).startsWith(prefixLower)) {
-        result.put(e.getKey.substring(prefixLower.length), e.getValue)
-      }
-    }
-    result
   }
 
   /**
-   * Extracts authentication configuration from ucConfig.
-   * Prefers `auth.*` keys; falls back to legacy `token` key.
-   *
-   * Returns a [[CaseInsensitiveStringMap]] so that downstream consumers (e.g.
-   * [[TokenProvider.create]]) can look up camelCase keys like `oauth.clientId`
-   * regardless of what casing the source map provides.
+   * Extracts authentication configuration from ucConfig, wrapped in a [[CaseInsensitiveStringMap]]
+   * so [[TokenProvider.create]] can look up keys regardless of casing. Prefers `auth.*` keys;
+   * falls back to the legacy `token` key.
    */
   private[coordinatedcommits] def extractAuthConfig(
       ucConfig: java.util.Map[String, String]): CaseInsensitiveStringMap = {
-    val filtered = filterByPrefix(ucConfig, UCConfigUtils.AUTH_PREFIX)
-    if (!filtered.isEmpty) {
-      new CaseInsensitiveStringMap(filtered)
-    } else {
-      Option(ucConfig.get(UCConfigUtils.LEGACY_TOKEN_KEY)) match {
-        case Some(token) =>
-          new CaseInsensitiveStringMap(
-            java.util.Map.of(
-              UCConfigUtils.AUTH_TYPE_KEY, UCConfigUtils.STATIC_AUTH_TYPE,
-              UCConfigUtils.LEGACY_TOKEN_KEY, token))
-        case None => CaseInsensitiveStringMap.empty()
-      }
-    }
+    new CaseInsensitiveStringMap(UCConfigUtils.extractAuthConfig(caseSensitiveView(ucConfig)))
   }
 
   /**
@@ -389,8 +355,7 @@ object UCTokenBasedRestClientFactory extends UCClientFactory {
    */
   private[coordinatedcommits] def extractAppVersions(
       ucConfig: java.util.Map[String, String]): Map[String, String] = {
-    val extra = filterByPrefix(ucConfig, UCConfigUtils.APP_VERSIONS_PREFIX).asScala.toMap
-    defaultAppVersions ++ extra
+    defaultAppVersions ++ UCConfigUtils.extractAppVersions(caseSensitiveView(ucConfig)).asScala
   }
 
   private[coordinatedcommits] def defaultAppVersions: Map[String, String] = {

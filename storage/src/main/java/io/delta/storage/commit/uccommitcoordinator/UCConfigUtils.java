@@ -24,7 +24,7 @@ import java.util.Map;
 /**
  * Shared utility methods for parsing flat UC configuration maps (e.g. auth, appVersions).
  * Used by both the Scala factory ({@code UCTokenBasedRestClientFactory}) and the Java
- * clients ({@link UCDeltaTokenBasedRestClient}, {@link UCTokenBasedRestClient}).
+ * client ({@link UCDeltaTokenBasedRestClient}).
  *
  * <p>Config key names are the single source of truth and must stay aligned with OSS Unity Catalog.
  */
