@@ -306,9 +306,16 @@ object UCTokenBasedRestClientFactory extends UCClientFactory {
     val appVersionEntries = defaultAppVersions.map { case (k, v) =>
       (UCConfigUtils.APP_VERSIONS_PREFIX + k) -> v
     }
+    // Copy via asCaseSensitiveMap() when available so OAuth keys like oauth.clientId
+    // keep their original casing for TokenProvider.create inside UCDeltaTokenBasedRestClient.
+    val casePreservingConfig = ucConfig match {
+      case cism: CaseInsensitiveStringMap =>
+        cism.asCaseSensitiveMap()
+      case m => m
+    }
     val merged = new java.util.HashMap[String, String]()
     appVersionEntries.foreach { case (k, v) => merged.put(k, v) }
-    merged.putAll(ucConfig)
+    merged.putAll(casePreservingConfig)
     val cls = Utils.classForName(DELTA_UC_CLIENT_CLASS)
     require(classOf[UCClient].isAssignableFrom(cls),
       s"$DELTA_UC_CLIENT_CLASS does not implement ${classOf[UCClient].getName}")
