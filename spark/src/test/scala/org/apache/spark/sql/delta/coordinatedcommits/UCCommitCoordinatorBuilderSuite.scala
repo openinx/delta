@@ -20,7 +20,7 @@ import scala.collection.JavaConverters._
 
 import io.delta.kernel.unitycatalog.UCTableIdentifier
 import io.delta.spark.internal.v2.snapshot.unitycatalog.UCTableInfo
-import io.delta.storage.commit.uccommitcoordinator.{UCClient, UCCommitCoordinatorClient}
+import io.delta.storage.commit.uccommitcoordinator.{UCClient, UCCommitCoordinatorClient, UCConfigUtils}
 import io.unitycatalog.client.auth.TokenProvider
 import org.mockito.{Mock, Mockito}
 import org.mockito.ArgumentMatchers.{any, eq => meq}
@@ -624,6 +624,37 @@ class UCCommitCoordinatorBuilderSuite extends SparkFunSuite with SharedSparkSess
     // 5. Verify TokenProvider can be created (proves round-trip preserves values)
     val tp = TokenProvider.create(roundTrippedAuth)
     assert(tp != null)
+    assert(tp.configs().get("oauth.clientId") === "test-id")
+    assert(tp.configs().get("oauth.clientSecret") === "test-secret")
+    assert(tp.configs().get("oauth.uri") === "https://example.com/token")
+  }
+
+  test("OAuth camelCase keys survive the plain-map client path " +
+      "(UCCatalogConfig -> UCTableInfo.toUcConfig -> TokenProvider)") {
+    val ucConfig = Map(
+      "uri" -> "https://uc.example.com",
+      "auth.type" -> "oauth",
+      "auth.oauth.clientId" -> "test-id",
+      "auth.oauth.clientSecret" -> "test-secret",
+      "auth.oauth.uri" -> "https://example.com/token")
+
+    // UCCatalogConfig.authConfig must preserve the original camelCase. A CaseInsensitiveStringMap
+    // would lowercase these keys, which then breaks OAuth on the plain-map path below.
+    val authConfig = UCCatalogConfig("cat", ucConfig).authConfig
+    assert(authConfig.get("oauth.clientId") === "test-id")
+    assert(authConfig.get("oauth.clientSecret") === "test-secret")
+
+    // Reproduce the real V2 connector path: UCTableInfo.toUcConfig re-prefixes auth keys into a
+    // plain map, UCConfigUtils extracts them, and TokenProvider.create receives a plain map (no
+    // case-insensitive fallback). This deterministically failed before authConfig preserved case.
+    val tableInfo = new UCTableInfo(
+      "table-id",
+      "/path",
+      new UCTableIdentifier("cat", "schema", "table"),
+      "https://uc.example.com",
+      authConfig)
+    val roundTrippedAuth = UCConfigUtils.extractAuthConfig(tableInfo.toUcConfig())
+    val tp = TokenProvider.create(roundTrippedAuth)
     assert(tp.configs().get("oauth.clientId") === "test-id")
     assert(tp.configs().get("oauth.clientSecret") === "test-secret")
     assert(tp.configs().get("oauth.uri") === "https://example.com/token")

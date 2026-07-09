@@ -380,9 +380,11 @@ case class UCCatalogConfig(catalogName: String, ucConfig: Map[String, String]) {
     throw new NoSuchElementException(s"No URI in config for catalog $catalogName"))
 
   /**
-   * Returns the authentication config suitable for [[TokenProvider.create]].
-   * Prefers `auth.*` keys; falls back to legacy `token` key.
+   * Returns the authentication config with original key casing preserved (e.g. `oauth.clientId`).
+   * The casing must survive here because callers serialize it back into a flat ucConfig (via
+   * `UCTableInfo.toUcConfig`) that flows through plain maps into `TokenProvider.create`, which
+   * looks up camelCase keys exactly. Prefers `auth.*` keys; falls back to the legacy `token` key.
    */
-  def authConfig: CaseInsensitiveStringMap =
-    UCTokenBasedRestClientFactory.extractAuthConfig(ucConfig.asJava)
+  def authConfig: java.util.Map[String, String] =
+    UCConfigUtils.extractAuthConfig(ucConfig.asJava)
 }
