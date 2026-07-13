@@ -46,12 +46,48 @@ public final class UCConfigUtils {
   private UCConfigUtils() {}
 
   /**
+   * Returns the value for {@code key} using a case-insensitive key match. Returns {@code null} when
+   * the key is absent. Top-level UC config keys ({@code uri}, {@code deltaRestApi.enabled}, etc.)
+   * are resolved case-insensitively so callers can treat {@code ucConfig} as a plain map without
+   * wrapping it in a case-insensitive map implementation.
+   */
+  public static String getIgnoreCase(Map<String, String> ucConfig, String key) {
+    String direct = ucConfig.get(key);
+    if (direct != null || ucConfig.containsKey(key)) {
+      return direct;
+    }
+    String keyLower = key.toLowerCase(Locale.ROOT);
+    for (Map.Entry<String, String> entry : ucConfig.entrySet()) {
+      if (entry.getKey().toLowerCase(Locale.ROOT).equals(keyLower)) {
+        return entry.getValue();
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Returns {@code true} when {@code ucConfig} contains {@code key}, matched case-insensitively.
+   */
+  public static boolean containsKeyIgnoreCase(Map<String, String> ucConfig, String key) {
+    if (ucConfig.containsKey(key)) {
+      return true;
+    }
+    String keyLower = key.toLowerCase(Locale.ROOT);
+    for (String existingKey : ucConfig.keySet()) {
+      if (existingKey.toLowerCase(Locale.ROOT).equals(keyLower)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Extracts the required {@code uri} value from a flat ucConfig map.
    *
    * @throws IllegalArgumentException if {@code uri} is not present.
    */
   public static String extractUri(Map<String, String> ucConfig) {
-    String uri = ucConfig.get(URI_KEY);
+    String uri = getIgnoreCase(ucConfig, URI_KEY);
     if (uri == null) {
       throw new IllegalArgumentException("UC config must contain '" + URI_KEY + "'");
     }
@@ -82,7 +118,7 @@ public final class UCConfigUtils {
     if (!authConfig.isEmpty()) {
       return authConfig;
     }
-    String token = ucConfig.get(LEGACY_TOKEN_KEY);
+    String token = getIgnoreCase(ucConfig, LEGACY_TOKEN_KEY);
     if (token != null) {
       return Map.of(AUTH_TYPE_KEY, STATIC_AUTH_TYPE, LEGACY_TOKEN_KEY, token);
     }
@@ -100,7 +136,7 @@ public final class UCConfigUtils {
         return true;
       }
     }
-    return ucConfig.containsKey(LEGACY_TOKEN_KEY);
+    return containsKeyIgnoreCase(ucConfig, LEGACY_TOKEN_KEY);
   }
 
   /**
@@ -148,7 +184,10 @@ public final class UCConfigUtils {
    */
   public static boolean parseBoolean(
       Map<String, String> ucConfig, String key, boolean defaultValue) {
-    String value = ucConfig.get(key);
-    return value != null ? Boolean.parseBoolean(value) : defaultValue;
+    if (!containsKeyIgnoreCase(ucConfig, key)) {
+      return defaultValue;
+    }
+    String value = getIgnoreCase(ucConfig, key);
+    return value != null && Boolean.parseBoolean(value);
   }
 }
