@@ -704,36 +704,35 @@ object UCDeltaCatalogClientImpl extends AbstractDeltaCatalogClientFactory with L
       catalogName: String,
       options: CaseInsensitiveStringMap,
       fallbackLoadTableFunc: Identifier => Table): UCDeltaCatalogClientImpl = {
+    // Normalize once at the Spark catalog boundary: downstream code treats options as a plain,
+    // case-preserved map so developers never need to reason about CaseInsensitiveStringMap.
+    val caseSensitiveOptions =
+      new java.util.HashMap[String, String](options.asCaseSensitiveMap())
+
     // Pre-flight: keep our user-facing errors instead of the factory's less specific ones.
-    if (options.get(UCConfigUtils.URI_KEY) == null) {
+    if (UCConfigUtils.getIgnoreCase(caseSensitiveOptions, UCConfigUtils.URI_KEY) == null) {
       throw new IllegalArgumentException(
         s"'${UCConfigUtils.URI_KEY}' is required (catalog '$catalogName')")
     }
-    validateAuthConfigured(options, catalogName)
+    validateAuthConfigured(caseSensitiveOptions, catalogName)
 
-    // `asCaseSensitiveMap()` preserves the user's original key case; `containsKey` is
-    // case-insensitive so defaults don't create duplicate keys.
-    val merged = new java.util.HashMap[String, String](options.asCaseSensitiveMap())
-    if (!options.containsKey(UCConfigUtils.DELTA_REST_API_ENABLED_KEY)) {
+    val merged = new java.util.HashMap[String, String](caseSensitiveOptions)
+    if (!UCConfigUtils.containsKeyIgnoreCase(merged, UCConfigUtils.DELTA_REST_API_ENABLED_KEY)) {
       merged.put(UCConfigUtils.DELTA_REST_API_ENABLED_KEY, "true")
     }
-    // `merged` must be a plain, case-preserved map here (never a CaseInsensitiveStringMap):
-    // CaseInsensitiveStringMap stores keys lowercased, so wrapping one would corrupt camelCase
-    // auth keys like `oauth.clientId`. Wrapping keeps top-level keys (`uri`,
-    // `deltaRestApi.enabled`) resolvable regardless of user casing, while `createDeltaClient`
-    // unwraps via `asCaseSensitiveMap()` to hand the client case-preserved keys.
     val ucClient = UCTokenBasedRestClientFactory
-      .createUCClient(new CaseInsensitiveStringMap(merged))
+      .createUCClient(merged)
       .asInstanceOf[UCDeltaClient]
 
-    val sspEnabled = options.getBoolean(ServerSidePlanningEnabledKey, false)
+    val sspEnabled = UCConfigUtils.parseBoolean(
+      caseSensitiveOptions, ServerSidePlanningEnabledKey, false)
     new UCDeltaCatalogClientImpl(catalogName, ucClient, sspEnabled, fallbackLoadTableFunc)
   }
 
   private[catalog] def validateAuthConfigured(
-      options: CaseInsensitiveStringMap,
+      options: util.Map[String, String],
       catalogName: String): Unit = {
-    if (!UCConfigUtils.hasAuthConfig(options.asCaseSensitiveMap())) {
+    if (!UCConfigUtils.hasAuthConfig(options)) {
       throw new IllegalArgumentException(
         s"auth configuration is required (catalog '$catalogName'). " +
           s"Set either '${UCConfigUtils.AUTH_PREFIX}type' (with the corresponding " +

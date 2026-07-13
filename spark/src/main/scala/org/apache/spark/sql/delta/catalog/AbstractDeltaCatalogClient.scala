@@ -189,7 +189,8 @@ private[delta] object AbstractDeltaCatalogClient extends Logging {
       options: CaseInsensitiveStringMap,
       fallbackLoadTableFunc: Identifier => Table): Option[AbstractDeltaCatalogClient] = {
     val key = UCConfigUtils.DELTA_REST_API_ENABLED_KEY
-    if (!options.getBoolean(key, true)) {
+    val caseSensitiveOptions = options.asCaseSensitiveMap()
+    if (!UCConfigUtils.parseBoolean(caseSensitiveOptions, key, true)) {
       return None
     }
     val factory = try {

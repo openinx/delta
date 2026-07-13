@@ -96,4 +96,16 @@ class UCConfigUtilsSuite extends AnyFunSuite {
     assert(UCConfigUtils.parseBoolean(config("other" -> "x"), "k", true))
     assert(!UCConfigUtils.parseBoolean(config("other" -> "x"), "k", false))
   }
+
+  test("getIgnoreCase and containsKeyIgnoreCase resolve top-level keys case-insensitively") {
+    val cfg = config("URI" -> "https://uc.example.com", "DeltaRestApi.Enabled" -> "false")
+    assert(UCConfigUtils.getIgnoreCase(cfg, "uri") === "https://uc.example.com")
+    assert(UCConfigUtils.containsKeyIgnoreCase(cfg, "deltaRestApi.enabled"))
+    assert(!UCConfigUtils.isDeltaRestApiEnabled(cfg))
+    assert(UCConfigUtils.extractUri(cfg) === "https://uc.example.com")
+  }
+
+  test("hasAuthConfig detects legacy token with alternate casing") {
+    assert(UCConfigUtils.hasAuthConfig(config("URI" -> "u", "Token" -> "t")))
+  }
 }
