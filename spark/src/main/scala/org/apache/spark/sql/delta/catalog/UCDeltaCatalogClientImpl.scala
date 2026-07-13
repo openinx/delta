@@ -717,6 +717,11 @@ object UCDeltaCatalogClientImpl extends AbstractDeltaCatalogClientFactory with L
     if (!options.containsKey(UCConfigUtils.DELTA_REST_API_ENABLED_KEY)) {
       merged.put(UCConfigUtils.DELTA_REST_API_ENABLED_KEY, "true")
     }
+    // `merged` must be a plain, case-preserved map here (never a CaseInsensitiveStringMap):
+    // CaseInsensitiveStringMap stores keys lowercased, so wrapping one would corrupt camelCase
+    // auth keys like `oauth.clientId`. Wrapping keeps top-level keys (`uri`,
+    // `deltaRestApi.enabled`) resolvable regardless of user casing, while `createDeltaClient`
+    // unwraps via `asCaseSensitiveMap()` to hand the client case-preserved keys.
     val ucClient = UCTokenBasedRestClientFactory
       .createUCClient(new CaseInsensitiveStringMap(merged))
       .asInstanceOf[UCDeltaClient]

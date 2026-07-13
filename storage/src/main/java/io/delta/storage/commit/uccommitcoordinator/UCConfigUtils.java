@@ -16,7 +16,6 @@
 
 package io.delta.storage.commit.uccommitcoordinator;
 
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -60,13 +59,18 @@ public final class UCConfigUtils {
   }
 
   /**
-   * Extracts authentication configuration from a flat ucConfig map.
-   * Prefers {@code auth.*} keys; falls back to legacy {@code token} key.
+   * Extracts authentication configuration from a flat ucConfig map, preserving the original key
+   * casing (e.g. {@code oauth.clientId}). Prefers {@code auth.*} keys; falls back to the legacy
+   * {@code token} key.
+   *
+   * <p>The returned map is case-sensitive; callers needing case-insensitive lookups must wrap it
+   * (e.g. {@code new CaseInsensitiveStringMap(...)}). The name is explicit about this to avoid
+   * confusion with the case-insensitive maps used elsewhere in the auth path.
    *
    * @param ucConfig the flat configuration map.
    * @return a map suitable for {@code TokenProvider.create}, with the {@code auth.} prefix stripped.
    */
-  public static Map<String, String> extractAuthConfig(Map<String, String> ucConfig) {
+  public static Map<String, String> extractCaseSensitiveAuthConfig(Map<String, String> ucConfig) {
     String authPrefixLower = AUTH_PREFIX.toLowerCase(Locale.ROOT);
     Map<String, String> authConfig = new LinkedHashMap<>();
     for (Map.Entry<String, String> entry : ucConfig.entrySet()) {
@@ -80,12 +84,9 @@ public final class UCConfigUtils {
     }
     String token = ucConfig.get(LEGACY_TOKEN_KEY);
     if (token != null) {
-      Map<String, String> legacy = new LinkedHashMap<>();
-      legacy.put(AUTH_TYPE_KEY, STATIC_AUTH_TYPE);
-      legacy.put(LEGACY_TOKEN_KEY, token);
-      return legacy;
+      return Map.of(AUTH_TYPE_KEY, STATIC_AUTH_TYPE, LEGACY_TOKEN_KEY, token);
     }
-    return Collections.emptyMap();
+    return Map.of();
   }
 
   /**
@@ -124,8 +125,22 @@ public final class UCConfigUtils {
    * key is absent.
    */
   public static boolean isDeltaRestApiEnabled(Map<String, String> ucConfig) {
-    String value = ucConfig.get(DELTA_REST_API_ENABLED_KEY);
-    return value == null || value.equalsIgnoreCase("true");
+    return parseBoolean(ucConfig, DELTA_REST_API_ENABLED_KEY, true);
+  }
+
+  /**
+   * Returns whether credential renewal is enabled. Defaults to {@code true} when the key is absent.
+   */
+  public static boolean isCredentialRenewalEnabled(Map<String, String> ucConfig) {
+    return parseBoolean(ucConfig, RENEW_CREDENTIAL_ENABLED_KEY, true);
+  }
+
+  /**
+   * Returns whether credential-scoped filesystem access is enabled. Defaults to {@code true} when
+   * the key is absent.
+   */
+  public static boolean isCredentialScopedFsEnabled(Map<String, String> ucConfig) {
+    return parseBoolean(ucConfig, CRED_SCOPED_FS_ENABLED_KEY, true);
   }
 
   /**

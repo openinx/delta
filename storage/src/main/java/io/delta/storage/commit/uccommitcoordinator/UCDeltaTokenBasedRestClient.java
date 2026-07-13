@@ -139,7 +139,8 @@ public class UCDeltaTokenBasedRestClient implements UCDeltaClient {
     Objects.requireNonNull(ucConfig, "ucConfig must not be null");
 
     String baseUri = UCConfigUtils.extractUri(ucConfig);
-    TokenProvider tokenProvider = TokenProvider.create(UCConfigUtils.extractAuthConfig(ucConfig));
+    TokenProvider tokenProvider =
+        TokenProvider.create(UCConfigUtils.extractCaseSensitiveAuthConfig(ucConfig));
     Map<String, String> appVersions = UCConfigUtils.extractAppVersions(ucConfig);
 
     ApiClientBuilder builder = ApiClientBuilder.create()
@@ -158,10 +159,8 @@ public class UCDeltaTokenBasedRestClient implements UCDeltaClient {
     this.baseUri = baseUri;
     this.tokenProvider = tokenProvider;
     this.appVersions = appVersions;
-    this.credentialRenewalEnabled = UCConfigUtils.parseBoolean(
-        ucConfig, UCConfigUtils.RENEW_CREDENTIAL_ENABLED_KEY, true);
-    this.credentialScopedFsEnabled = UCConfigUtils.parseBoolean(
-        ucConfig, UCConfigUtils.CRED_SCOPED_FS_ENABLED_KEY, true);
+    this.credentialRenewalEnabled = UCConfigUtils.isCredentialRenewalEnabled(ucConfig);
+    this.credentialScopedFsEnabled = UCConfigUtils.isCredentialScopedFsEnabled(ucConfig);
     this.hadoopConfSupplier = hadoopConfSupplier != null ? hadoopConfSupplier : Configuration::new;
   }
 

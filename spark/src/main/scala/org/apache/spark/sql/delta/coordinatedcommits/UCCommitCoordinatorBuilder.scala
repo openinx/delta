@@ -346,7 +346,11 @@ object UCTokenBasedRestClientFactory extends UCClientFactory {
    */
   private[coordinatedcommits] def extractAuthConfig(
       ucConfig: java.util.Map[String, String]): CaseInsensitiveStringMap = {
-    new CaseInsensitiveStringMap(UCConfigUtils.extractAuthConfig(caseSensitiveView(ucConfig)))
+    // The argument to `new CaseInsensitiveStringMap` must be a case-preserved plain map: it stores
+    // keys lowercased, so wrapping an already-lowercased map would drop camelCase (e.g.
+    // `oauth.clientId`). `extractCaseSensitiveAuthConfig` returns such a plain map.
+    new CaseInsensitiveStringMap(
+      UCConfigUtils.extractCaseSensitiveAuthConfig(caseSensitiveView(ucConfig)))
   }
 
   /**
@@ -386,5 +390,5 @@ case class UCCatalogConfig(catalogName: String, ucConfig: Map[String, String]) {
    * looks up camelCase keys exactly. Prefers `auth.*` keys; falls back to the legacy `token` key.
    */
   def authConfig: java.util.Map[String, String] =
-    UCConfigUtils.extractAuthConfig(ucConfig.asJava)
+    UCConfigUtils.extractCaseSensitiveAuthConfig(ucConfig.asJava)
 }

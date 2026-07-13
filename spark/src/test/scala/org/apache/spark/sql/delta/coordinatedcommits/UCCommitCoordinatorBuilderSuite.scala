@@ -653,7 +653,7 @@ class UCCommitCoordinatorBuilderSuite extends SparkFunSuite with SharedSparkSess
       new UCTableIdentifier("cat", "schema", "table"),
       "https://uc.example.com",
       authConfig)
-    val roundTrippedAuth = UCConfigUtils.extractAuthConfig(tableInfo.toUcConfig())
+    val roundTrippedAuth = UCConfigUtils.extractCaseSensitiveAuthConfig(tableInfo.toUcConfig())
     val tp = TokenProvider.create(roundTrippedAuth)
     assert(tp.configs().get("oauth.clientId") === "test-id")
     assert(tp.configs().get("oauth.clientSecret") === "test-secret")
